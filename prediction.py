@@ -10,13 +10,23 @@ from scipy import signal
 import pandas as pd
 import time
 import pickle
-import pyautogui
-
-from collections import deque 
+from collections import deque
 
 # Suppress sklearn warnings
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
+
+# Define movement commands
+COMMANDS = {
+    0: "STOP",
+    1: "FORWARD",
+    2: "BACKWARD",
+    3: "LEFT",
+    4: "RIGHT",
+    5: "ACCELERATE",
+    6: "BRAKE",
+    7: "OVERTAKE"
+}
 
 def setup_filters(sampling_rate):
     b_notch, a_notch = signal.iirnotch(50.0 / (0.5 * sampling_rate), 30.0)
@@ -54,15 +64,23 @@ def load_model_and_scaler():
         scaler = pickle.load(f)
     return clf, scaler
 
+def send_command_to_car(serial_conn, command):
+    """ Send movement command to car """
+    serial_conn.write(f"{command}\n".encode())  # Send command as string over Serial
+    print(f"Sent Command: {command}")
+
 def main():
-    ser = serial.Serial('COM5', 115200, timeout=1)
+    # Set up serial communication
+    eeg_serial = serial.Serial('COM5', 115200, timeout=1)  # EEG module
+    car_serial = serial.Serial('COM6', 115200, timeout=1)  # Car control module
+
     clf, scaler = load_model_and_scaler()
     b_notch, a_notch, b_bandpass, a_bandpass = setup_filters(512)
-    buffer = deque(maxlen=512)  
+    buffer = deque(maxlen=512)
 
     while True:
         try:
-            raw_data = ser.readline().decode('latin-1').strip()
+            raw_data = eeg_serial.readline().decode('latin-1').strip()
             if raw_data:
                 eeg_value = float(raw_data)
                 buffer.append(eeg_value)
@@ -76,22 +94,15 @@ def main():
 
                     df = pd.DataFrame([features])
                     X_scaled = scaler.transform(df)
-                    prediction = clf.predict(X_scaled)
-                    print(f"Predicted Class: {prediction}")
+                    prediction = clf.predict(X_scaled)[0]  # Get predicted class
                     buffer.clear()
-                    if prediction == 0:
-                        pyautogui.keyDown('space')
-                        time.sleep(1)  # You can adjust the duration the key is pressed
-                        pyautogui.keyUp('space')
 
-                    elif prediction == 1:
-                        pyautogui.keyDown('w')
-                        time.sleep(1)  # You can adjust the duration the key is pressed
-                        pyautogui.keyUp('w') 
-                
+                    if prediction in COMMANDS:
+                        send_command_to_car(car_serial, COMMANDS[prediction])
+
         except Exception as e:
             print(f'Error: {e}')
             continue
 
-if __name__ == '__main__':
+if _name_ == '_main_':
     main()
