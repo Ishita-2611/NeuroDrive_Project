@@ -1,11 +1,14 @@
 import serial
 import joblib
+import numpy as np
 
 # Load trained model
 model = joblib.load('eeg_model.pkl')
 
-# Connect to Maker UNO
+# Connect to EEG device (adjust COM port as needed)
 ser = serial.Serial('COM4', 115200)
+
+print("🔹 Listening for EEG data...")
 
 while True:
     line = ser.readline().decode('utf-8').strip()
@@ -13,8 +16,12 @@ while True:
 
     if len(values) == 4:
         try:
-            values = [int(v) for v in values]
-            prediction = model.predict([values])
-            print(f"Predicted Command: {prediction[0]}")
+            # Convert values to integers
+            values = np.array([int(v) for v in values]).reshape(1, -1)
+            
+            # Predict using trained model
+            prediction = model.predict(values)
+            print(f"🔮 Predicted Command: {prediction[0]}")
         except ValueError:
-            pass
+            print("⚠️ Invalid data received, skipping...")
+            continue
