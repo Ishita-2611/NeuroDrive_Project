@@ -1,16 +1,30 @@
-import pandas as pd
+import json
 
-# Load all CSV files into one DataFrame
-files = ['eeg_data_focus.csv', 'eeg_data_relax.csv', 'eeg_data_left.csv', 'eeg_data_right.csv']
+# List of EEG data JSON files
+files = [
+    'eeg_data_focus_9e7b30e6.json',
+    'eeg_data_left_19fb23ea.json',
+    'eeg_data_relax_b2467bf2.json',
+    'eeg_data_right_4d0c952b.json'
+]
 
-dataframes = []
+# Initialize JSON structure
+eeg_json = {}
+
+# Load and merge JSON files
 for file in files:
-    df = pd.read_csv(file)
-    dataframes.append(df)
+    with open(file, 'r') as json_file:
+        data = json.load(json_file)
 
-combined_df = pd.concat(dataframes, ignore_index=True)
+        for label, timestamps in data.items():
+            if label not in eeg_json:
+                eeg_json[label] = {}  # Initialize label category
 
-# Save combined dataset
-combined_df.to_csv('eeg_combined_data.csv', index=False)
+            eeg_json[label].update(timestamps)  # Merge timestamp data
 
-print(f"Combined dataset saved as 'eeg_combined_data.csv'")
+# Save the combined dataset as a JSON file
+json_filename = 'eeg_combined_data.json'
+with open(json_filename, 'w') as json_file:
+    json.dump(eeg_json, json_file, indent=4)
+
+print(f"✅ Combined dataset saved as '{json_filename}'")

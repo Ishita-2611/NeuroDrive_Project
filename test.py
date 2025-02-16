@@ -5,7 +5,7 @@ import joblib
 model = joblib.load('eeg_model.pkl')
 
 # Connect to Maker UNO
-ser = serial.Serial('COM3', 115200)
+ser = serial.Serial('COM4', 115200)
 
 while True:
     line = ser.readline().decode('utf-8').strip()
