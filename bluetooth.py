@@ -10,11 +10,11 @@ def send_command(command):
 
 try:
     while True:
-        command = input("Enter Command (w=Forward, s=Backward, a=Left, d=Right, x=Stop): ")
-        if command in ['w', 's', 'a', 'd', 'x']:
+        command = input("Enter Command (f=Forward, s=Stop, l=Left, r=Right): ")
+        if command in ['f', 's', 'l', 'r']:
             send_command(command)
         else:
-            print("Invalid Command! Use: w, s, a, d, x")
+            print("Invalid Command! Use: f, s, l, r")
 except KeyboardInterrupt:
     print("Disconnected")
     bluetooth.close()
