@@ -2,13 +2,13 @@ import socket
 import time
 import random
 
-SLAVE_IP = "192.168.X.X"  # Replace with your slave RPi's IP
+SLAVE_IP = "192.168.8.126"  # Replace with your slave RPi's IP
 PORT = 5005
 
 COMMANDS = ['L', 'R', 'M', 'S']
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
-    client.connect((SLAVE_IP, PORT))
+    client.connect((192.168.8.126, PORT))
     print(f"Connected to {SLAVE_IP}:{PORT}")
 
     while True:
