@@ -16,6 +16,26 @@ logging.basicConfig(
     ]
 )
 
+# Valid commands and their descriptions - matching Arduino definitions
+VALID_COMMANDS = {
+    'L': 'Turn Left',
+    'R': 'Turn Right',
+    'M': 'Move Forward',
+    'S': 'Stop Motors'
+}
+
+def validate_command(cmd):
+    """
+    Validate if the command is supported.
+    
+    :param cmd: Command to validate
+    :return: (bool, str) Tuple of (is_valid, message)
+    """
+    cmd = cmd.strip().upper()
+    if cmd in VALID_COMMANDS:
+        return True, f"Valid command: {VALID_COMMANDS[cmd]}"
+    return False, f"Invalid command: '{cmd}'. Valid commands are: {', '.join([f'{k} ({v})' for k, v in VALID_COMMANDS.items()])}"
+
 def find_arduino_port(preferred_ports=None):
     """
     Dynamically find Arduino port with optional preferred port list.
@@ -72,12 +92,15 @@ def establish_serial_connection(port, baudrate=9600, timeout=2):
         time.sleep(2)  # Allow Arduino reset time
         ser.flush()
         
-        # Test connection
-        ser.write(b"TEST\n")
+        # Test connection with Stop command
+        ser.write(b"S\n")  # Send stop command as test
         time.sleep(0.1)
         if ser.in_waiting:
             response = ser.readline().decode().strip()
-            logging.info(f"Arduino test response: {response}")
+            if response == "S":  # Arduino echoes the command
+                logging.info("Arduino connection test successful")
+            else:
+                logging.warning(f"Unexpected test response: {response}")
         
         logging.info(f"Serial connection established on {port}")
         return ser
@@ -126,42 +149,63 @@ def handle_arduino_communication(ser, conn):
                 logging.info("Connection lost")
                 break
             
-            logging.info(f"Received command: {data}")
+            # Validate command
+            is_valid, message = validate_command(data)
+            if not is_valid:
+                logging.warning(message)
+                conn.send(f"ERROR: {message}".encode())
+                continue
+            
+            logging.info(f"Received command: {data} ({VALID_COMMANDS[data.upper()]})")
             
             # Verify serial connection is still valid
             if not ser.is_open:
                 logging.error("Serial connection lost")
-                conn.send("SERIAL_ERROR".encode())
+                conn.send("ERROR: Serial connection lost".encode())
                 break
+            
+            # Clear any pending data
+            ser.reset_input_buffer()
             
             # Send to Arduino
             try:
-                ser.write((data + "\n").encode())
+                command = data.upper() + "\n"
+                ser.write(command.encode())
+                logging.debug(f"Sent to Arduino: {command.strip()}")
             except serial.SerialException as e:
                 logging.error(f"Failed to write to Arduino: {e}")
-                conn.send("WRITE_ERROR".encode())
+                conn.send("ERROR: Failed to send command to Arduino".encode())
                 break
             
             # Wait for Arduino response
             start_time = time.time()
             response = ""
-            while time.time() - start_time < 2:
+            while time.time() - start_time < 1:  # Reduced timeout since Arduino responds immediately
                 if ser.in_waiting:
                     try:
                         response = ser.readline().decode().strip()
                         if response:
                             logging.info(f"Arduino response: {response}")
-                            conn.send(response.encode())
+                            # Handle the echo response from Arduino
+                            if response == data.upper():
+                                status = "OK"
+                            elif response == "Invalid Command!":
+                                status = "ERROR"
+                            else:
+                                status = "UNKNOWN"
+                            
+                            formatted_response = f"CMD:{data.upper()}|STATUS:{status}|RESP:{response}"
+                            conn.send(formatted_response.encode())
                             break
                     except serial.SerialException as e:
                         logging.error(f"Failed to read from Arduino: {e}")
-                        conn.send("READ_ERROR".encode())
+                        conn.send("ERROR: Failed to read Arduino response".encode())
                         return
-                time.sleep(0.1)
+                time.sleep(0.01)  # Shorter sleep time for faster response
             
             if not response:
-                logging.warning("No Arduino response")
-                conn.send("NO_RESPONSE".encode())
+                logging.warning(f"No response from Arduino for command: {data}")
+                conn.send(f"ERROR: No response from Arduino for command {data}".encode())
     
     except (socket.error, serial.SerialException) as e:
         logging.error(f"Communication error: {e}")
